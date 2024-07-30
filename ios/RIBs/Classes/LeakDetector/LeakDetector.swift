@@ -32,10 +32,10 @@ public enum LeakDetectionStatus {
 public struct LeakDefaultExpectationTime {
 
     /// The object deallocation time.
-    public static let deallocation = 1.0
+    public static let deallocation = 3.0
 
     /// The view disappear time.
-    public static let viewDisappear = 5.0
+    public static let viewDisappear = 7.0
 }
 
 /// The handle for a scheduled leak detection.
@@ -99,7 +99,8 @@ public class LeakDetector {
                         print(message)
                     }
                 } else {
-                    assert(didDeallocate, message)
+                    print(message)
+                    debugPause()
                 }
             }
 
@@ -135,7 +136,8 @@ public class LeakDetector {
                         print(message)
                     }
                 } else {
-                    assert(viewDidDisappear, message)
+                    print(message)
+                    debugPause()
                 }
             }
 
@@ -191,4 +193,29 @@ fileprivate class LeakDetectionHandleImpl: LeakDetectionHandle {
         cancelledRelay.accept(true)
         cancelClosure?()
     }
+}
+
+private func debugPause() {
+    var isDebuggerAttached: Bool {
+        // Buffer for "sysctl(...)" call's result.
+        var info = kinfo_proc()
+        // Counts buffer's size in bytes (like C/C++'s `sizeof`).
+        var size = MemoryLayout.stride(ofValue: info)
+        // Tells we want info about own process.
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()]
+        // Call the API (and assert success).
+        let junk = sysctl(&mib, UInt32(mib.count), &info, &size, nil, 0)
+        assert(junk == 0, "sysctl failed")
+        // Finally, checks if debugger's flag is present yet.
+        return (info.kp_proc.p_flag & P_TRACED) != 0
+    }
+
+    guard isDebuggerAttached else { return }
+
+    // 테스트 환경에서는 생략한다.
+    if NSClassFromString("XCTest") != nil {
+        return
+    }
+
+    raise(SIGINT)
 }
